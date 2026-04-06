@@ -1146,10 +1146,11 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 						return;
 					}
 
-					// If it's an absolute web/http or file path, use as-is
+					// If it's an absolute web/http, file, or app-media path, use as-is
 					if (
 						wallpaper.startsWith("http") ||
 						wallpaper.startsWith("file://") ||
+						wallpaper.startsWith("app-media://") ||
 						wallpaper.startsWith("/")
 					) {
 						// If it's an absolute server path (starts with '/'), resolve via getAssetPath as well
@@ -1185,6 +1186,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		const isImageUrl = Boolean(
 			resolvedWallpaper &&
 				(resolvedWallpaper.startsWith("file://") ||
+					resolvedWallpaper.startsWith("app-media://") ||
 					resolvedWallpaper.startsWith("http") ||
 					resolvedWallpaper.startsWith("/") ||
 					resolvedWallpaper.startsWith("data:")),

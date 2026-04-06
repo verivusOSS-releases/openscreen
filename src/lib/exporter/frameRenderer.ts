@@ -233,6 +233,7 @@ export class FrameRenderer {
 			// Render background based on type
 			if (
 				wallpaper.startsWith("file://") ||
+				wallpaper.startsWith("app-media://") ||
 				wallpaper.startsWith("data:") ||
 				wallpaper.startsWith("/") ||
 				wallpaper.startsWith("http")
@@ -247,7 +248,11 @@ export class FrameRenderer {
 					if (!imageUrl.startsWith(window.location.origin)) {
 						img.crossOrigin = "anonymous";
 					}
-				} else if (wallpaper.startsWith("file://") || wallpaper.startsWith("data:")) {
+				} else if (
+					wallpaper.startsWith("file://") ||
+					wallpaper.startsWith("app-media://") ||
+					wallpaper.startsWith("data:")
+				) {
 					imageUrl = wallpaper;
 				} else {
 					imageUrl = window.location.origin + wallpaper;

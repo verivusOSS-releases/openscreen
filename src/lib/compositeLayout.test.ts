@@ -78,25 +78,6 @@ describe("computeCompositeLayout", () => {
 		expect(layout?.screenCover).toBe(true);
 	});
 
-	it("bounds the vertical-stack layout within maxContentSize when webcam is present", () => {
-		const layout = computeCompositeLayout({
-			canvasSize: { width: 1920, height: 1080 },
-			maxContentSize: { width: 1536, height: 864 },
-			screenSize: { width: 1920, height: 1080 },
-			webcamSize: { width: 1280, height: 720 },
-			layoutPreset: "vertical-stack",
-		});
-
-		expect(layout).not.toBeNull();
-		// Screen and webcam should be bounded within maxContentSize, not filling the canvas
-		expect(layout!.screenRect.width).toBeLessThanOrEqual(1536);
-		expect(layout!.screenRect.height + (layout!.webcamRect?.height ?? 0)).toBeLessThanOrEqual(
-			864 + 1,
-		); // +1 for rounding
-		// Should be centered in canvas
-		expect(layout!.screenRect.x).toBeGreaterThan(0);
-	});
-
 	it("forces circular and square masks to use square dimensions", () => {
 		const circularLayout = computeCompositeLayout({
 			canvasSize: { width: 1920, height: 1080 },

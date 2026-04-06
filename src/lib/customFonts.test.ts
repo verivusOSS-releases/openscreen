@@ -27,12 +27,18 @@ describe("isValidGoogleFontsUrl", () => {
 
 describe("font URL CSS injection prevention", () => {
 	it("injection characters would be caught by the character blocklist", () => {
-		// These characters are blocked in loadFont() via /['";)\\]/
-		const dangerousChars = ["'", '"', ";", ")", "\\"];
+		// These characters are blocked in loadFont() via /['")\\ ]/
+		// Semicolons are allowed (used in Google Fonts weight lists like wght@400;700)
+		const dangerousChars = ["'", '"', ")", "\\", " "];
 		for (const char of dangerousChars) {
 			const url = `https://fonts.googleapis.com/css2?family=Roboto${char}`;
-			// Even if the URL passes domain validation, the char check in loadFont blocks it
-			expect(/['";)\\]/.test(url)).toBe(true);
+			expect(/['")\\ ]/.test(url)).toBe(true);
 		}
+	});
+
+	it("allows semicolons in Google Fonts weight lists", () => {
+		const url = "https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;700&display=swap";
+		// Semicolons should NOT be blocked — they're used for weight lists
+		expect(/['")\\ ]/.test(url)).toBe(false);
 	});
 });

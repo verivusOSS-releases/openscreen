@@ -82,8 +82,8 @@ export function loadFont(font: CustomFont): Promise<void> {
 				return;
 			}
 
-			// Reject CSS injection characters
-			if (/['";)\\]/.test(font.importUrl)) {
+			// Reject CSS injection characters (semicolons allowed — used in Google Fonts weight lists)
+			if (/['")\\ ]/.test(font.importUrl)) {
 				console.warn(`Rejected font URL with unsafe characters for "${font.name}"`);
 				reject(new Error(`Invalid font URL: contains unsafe characters`));
 				return;

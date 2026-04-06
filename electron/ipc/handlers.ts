@@ -25,6 +25,115 @@ const PROJECT_FILE_EXTENSION = "openscreen";
 const SHORTCUTS_FILE = path.join(app.getPath("userData"), "shortcuts.json");
 const RECORDING_SESSION_SUFFIX = ".session.json";
 const ALLOWED_EXTERNAL_DOMAINS: string[] = ["github.com"];
+const ALLOWED_IMPORT_VIDEO_EXTENSIONS = new Set([".webm", ".mp4", ".mov", ".avi", ".mkv"]);
+
+/**
+ * Paths explicitly approved by the user via file picker dialogs or project loads.
+ * These are added at runtime when the user selects files from outside the default directories.
+ */
+const approvedPaths = new Set<string>();
+
+function approveFilePath(filePath: string): void {
+	approvedPaths.add(path.resolve(filePath));
+}
+
+function isPathWithinDir(filePath: string, dirPath: string): boolean {
+	const resolved = path.resolve(filePath);
+	const resolvedDir = path.resolve(dirPath);
+	return resolved === resolvedDir || resolved.startsWith(resolvedDir + path.sep);
+}
+
+function isPathAllowed(filePath: string): boolean {
+	const resolved = path.resolve(filePath);
+	if (approvedPaths.has(resolved)) return true;
+	return [RECORDINGS_DIR].some((dir) => isPathWithinDir(resolved, dir));
+}
+
+function hasAllowedImportVideoExtension(filePath: string): boolean {
+	return ALLOWED_IMPORT_VIDEO_EXTENSIONS.has(path.extname(filePath).toLowerCase());
+}
+
+async function approveReadableVideoPath(
+	filePath?: string | null,
+	trustedDirs?: string[],
+): Promise<string | null> {
+	const normalizedPath = normalizeVideoSourcePath(filePath);
+	if (!normalizedPath) {
+		return null;
+	}
+
+	if (isPathAllowed(normalizedPath)) {
+		return normalizedPath;
+	}
+
+	if (!hasAllowedImportVideoExtension(normalizedPath)) {
+		return null;
+	}
+
+	if (trustedDirs) {
+		const resolved = path.resolve(normalizedPath);
+		const withinTrusted = trustedDirs.some((dir) => isPathWithinDir(resolved, dir));
+		if (!withinTrusted) {
+			return null;
+		}
+	}
+
+	try {
+		const stats = await fs.stat(normalizedPath);
+		if (!stats.isFile()) {
+			return null;
+		}
+	} catch {
+		return null;
+	}
+
+	approveFilePath(normalizedPath);
+	return normalizedPath;
+}
+
+async function getApprovedProjectSession(
+	project: unknown,
+	projectFilePath?: string,
+): Promise<RecordingSession | null> {
+	if (!project || typeof project !== "object") {
+		return null;
+	}
+
+	const rawProject = project as { media?: unknown; videoPath?: unknown };
+	const media: ProjectMedia | null =
+		normalizeProjectMedia(rawProject.media) ??
+		(typeof rawProject.videoPath === "string"
+			? {
+					screenVideoPath: normalizeVideoSourcePath(rawProject.videoPath) ?? rawProject.videoPath,
+				}
+			: null);
+
+	if (!media) {
+		return null;
+	}
+
+	// Only auto-approve media paths within the project's directory or RECORDINGS_DIR.
+	const trustedDirs = [RECORDINGS_DIR];
+	if (projectFilePath) {
+		trustedDirs.push(path.dirname(path.resolve(projectFilePath)));
+	}
+
+	const screenVideoPath = await approveReadableVideoPath(media.screenVideoPath, trustedDirs);
+	if (!screenVideoPath) {
+		throw new Error("Project references an invalid or unsupported screen video path");
+	}
+
+	const webcamVideoPath = media.webcamVideoPath
+		? await approveReadableVideoPath(media.webcamVideoPath, trustedDirs)
+		: undefined;
+	if (media.webcamVideoPath && !webcamVideoPath) {
+		throw new Error("Project references an invalid or unsupported webcam video path");
+	}
+
+	return webcamVideoPath
+		? { screenVideoPath, webcamVideoPath, createdAt: Date.now() }
+		: { screenVideoPath, createdAt: Date.now() };
+}
 
 type SelectedSource = {
 	name: string;
@@ -574,6 +683,7 @@ export function registerIpcHandlers(
 			}
 
 			await fs.writeFile(result.filePath, Buffer.from(videoData));
+			approveFilePath(result.filePath);
 
 			return {
 				success: true,
@@ -633,7 +743,7 @@ export function registerIpcHandlers(
 
 	ipcMain.handle("reveal-in-folder", async (_, filePath: string) => {
 		try {
-			if (!isTrustedMediaPath(filePath)) {
+			if (!isPathAllowed(filePath)) {
 				return {
 					success: false,
 					error: "Access denied: path is outside trusted media directories",
@@ -815,7 +925,7 @@ export function registerIpcHandlers(
 
 	ipcMain.handle("set-current-video-path", async (_, videoPath: string) => {
 		const normalizedVideoPath = normalizeVideoSourcePath(videoPath);
-		if (!normalizedVideoPath || !isTrustedMediaPath(normalizedVideoPath)) {
+		if (!normalizedVideoPath || !isPathAllowed(normalizedVideoPath)) {
 			return {
 				success: false,
 				message: "Access denied: path is outside trusted media directories",
