@@ -84,9 +84,15 @@ export class StreamingVideoDecoder {
 	private metadata: DecodedVideoInfo | null = null;
 
 	private async loadSourceFile(videoUrl: string): Promise<{ file: File; blob: Blob }> {
-		const isRemoteUrl = /^(https?:|blob:|data:)/i.test(videoUrl);
+		// Reject external HTTP(S) URLs — all video loading should go through IPC
+		if (/^https?:/i.test(videoUrl)) {
+			throw new Error("External HTTP URLs are not supported for video loading");
+		}
 
-		if (!isRemoteUrl && window.electronAPI?.readBinaryFile) {
+		// blob: and data: URLs are safe for in-memory video data — use fetch()
+		const isFetchableUrl = /^(blob:|data:)/i.test(videoUrl);
+
+		if (!isFetchableUrl && window.electronAPI?.readBinaryFile) {
 			const result = await this.withTimeout(
 				window.electronAPI.readBinaryFile(videoUrl),
 				SOURCE_LOAD_TIMEOUT_MS,

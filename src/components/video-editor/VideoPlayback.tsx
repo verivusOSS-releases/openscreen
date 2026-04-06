@@ -32,6 +32,7 @@ import {
 	getNativeAspectRatioValue,
 } from "@/utils/aspectRatioUtils";
 import { AnnotationOverlay } from "./AnnotationOverlay";
+import { isAllowedWallpaperValue, WALLPAPER_PATHS } from "./projectPersistence";
 import {
 	type AnnotationRegion,
 	type SpeedRegion,
@@ -1120,6 +1121,13 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 					if (!wallpaper) {
 						const def = await getAssetPath("wallpapers/wallpaper1.jpg");
 						if (mounted) setResolvedWallpaper(def);
+						return;
+					}
+
+					// Reject disallowed wallpaper values (e.g., external http URLs)
+					if (!isAllowedWallpaperValue(wallpaper)) {
+						const defaultPath = await getAssetPath(WALLPAPER_PATHS[0].replace(/^\//, ""));
+						if (mounted) setResolvedWallpaper(defaultPath);
 						return;
 					}
 

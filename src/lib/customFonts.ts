@@ -75,19 +75,34 @@ export function loadFont(font: CustomFont): Promise<void> {
 		}
 
 		try {
+			// Validate URL at load time (not just at UI entry)
+			if (!isValidGoogleFontsUrl(font.importUrl)) {
+				console.warn(`Rejected invalid font URL for "${font.name}": not a valid Google Fonts URL`);
+				reject(new Error(`Invalid font URL: not a Google Fonts URL`));
+				return;
+			}
+
+			// Reject CSS injection characters
+			if (/['";)\\]/.test(font.importUrl)) {
+				console.warn(`Rejected font URL with unsafe characters for "${font.name}"`);
+				reject(new Error(`Invalid font URL: contains unsafe characters`));
+				return;
+			}
+
 			const styleId = `custom-font-${font.id}`;
 
-			// Remove existing style if present
+			// Remove existing element if present
 			const existing = document.getElementById(styleId);
 			if (existing) {
 				existing.remove();
 			}
 
-			// Create style element with @import
-			const style = document.createElement("style");
-			style.id = styleId;
-			style.textContent = `@import url('${font.importUrl}');`;
-			document.head.appendChild(style);
+			// Use <link> tag instead of @import template literal to prevent CSS injection
+			const link = document.createElement("link");
+			link.id = styleId;
+			link.rel = "stylesheet";
+			link.href = font.importUrl;
+			document.head.appendChild(link);
 
 			// Wait for font to load
 			waitForFont(font.fontFamily)
