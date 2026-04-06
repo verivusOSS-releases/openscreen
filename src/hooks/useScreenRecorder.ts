@@ -531,14 +531,6 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 					? { audioBitsPerSecond: systemAudioTrack ? AUDIO_BITRATE_SYSTEM : AUDIO_BITRATE_VOICE }
 					: {}),
 			});
-			screenRecorder.current.recorder.addEventListener(
-				"error",
-				() => {
-					setRecording(false);
-				},
-				{ once: true },
-			);
-
 			if (webcamStream.current) {
 				webcamRecorder.current = createRecorderHandle(webcamStream.current, {
 					mimeType,
@@ -559,6 +551,31 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 			const activeWebcamRecorder = webcamRecorder.current;
 			const activeRecordingId = recordingId.current;
 			if (activeScreenRecorder) {
+				activeScreenRecorder.recorder.addEventListener(
+					"error",
+					() => {
+						if (screenRecorder.current === activeScreenRecorder) {
+							screenRecorder.current = null;
+						}
+						if (webcamRecorder.current === activeWebcamRecorder) {
+							webcamRecorder.current = null;
+						}
+						if (activeWebcamRecorder?.recorder.state === "recording") {
+							try {
+								activeWebcamRecorder.recorder.stop();
+							} catch {
+								// Webcam recorder may already be stopped.
+							}
+						}
+						teardownMedia();
+						setRecording(false);
+						window.electronAPI?.setRecordingState(false);
+						if (finalizingRecordingId.current === activeRecordingId) {
+							finalizingRecordingId.current = null;
+						}
+					},
+					{ once: true },
+				);
 				activeScreenRecorder.recorder.addEventListener(
 					"stop",
 					() => {
