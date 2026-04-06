@@ -7,10 +7,6 @@ function encodeRelativeAssetPath(relativePath: string): string {
 		.join("/");
 }
 
-function ensureTrailingSlash(value: string): string {
-	return value.endsWith("/") ? value : `${value}/`;
-}
-
 export async function getAssetPath(relativePath: string): Promise<string> {
 	const encodedRelativePath = encodeRelativeAssetPath(relativePath);
 
@@ -28,7 +24,10 @@ export async function getAssetPath(relativePath: string): Promise<string> {
 			if (window.electronAPI && typeof window.electronAPI.getAssetBasePath === "function") {
 				const base = await window.electronAPI.getAssetBasePath();
 				if (base) {
-					return new URL(encodedRelativePath, ensureTrailingSlash(base)).toString();
+					// Convert file:// base to app-media:// for safe local loading
+					const baseUrl = new URL(base);
+					const mediaUrl = `app-media://${baseUrl.pathname}${encodedRelativePath}`;
+					return mediaUrl;
 				}
 			}
 		}

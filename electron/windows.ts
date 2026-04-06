@@ -1,6 +1,7 @@
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { BrowserWindow, ipcMain, screen } from "electron";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { app, BrowserWindow, ipcMain, net, protocol, screen } from "electron";
+import { RECORDINGS_DIR } from "./main";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -8,6 +9,44 @@ const APP_ROOT = path.join(__dirname, "..");
 const VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
 const RENDERER_DIST = path.join(APP_ROOT, "dist");
 const HEADLESS = process.env["HEADLESS"] === "true";
+
+export function registerMediaProtocol() {
+	protocol.handle("app-media", (request) => {
+		const url = new URL(request.url);
+		// The pathname is the absolute file path, percent-encoded
+		let filePath: string;
+		try {
+			filePath = decodeURIComponent(url.pathname);
+		} catch {
+			return new Response("Invalid path", { status: 400 });
+		}
+
+		// On Windows, pathname starts with / before drive letter: /C:/...
+		if (process.platform === "win32" && filePath.startsWith("/")) {
+			filePath = filePath.slice(1);
+		}
+
+		const resolved = path.resolve(filePath);
+		const recordingsRoot = path.resolve(RECORDINGS_DIR);
+		const assetsRoot = path.resolve(
+			app.isPackaged
+				? path.join(process.resourcesPath, "assets")
+				: path.join(APP_ROOT, "public", "assets"),
+		);
+
+		const isTrusted =
+			resolved === recordingsRoot ||
+			resolved.startsWith(recordingsRoot + path.sep) ||
+			resolved === assetsRoot ||
+			resolved.startsWith(assetsRoot + path.sep);
+
+		if (!isTrusted) {
+			return new Response("Forbidden", { status: 403 });
+		}
+
+		return net.fetch(pathToFileURL(resolved).toString());
+	});
+}
 
 let hudOverlayWindow: BrowserWindow | null = null;
 
@@ -97,7 +136,6 @@ export function createEditorWindow(): BrowserWindow {
 			preload: path.join(__dirname, "preload.mjs"),
 			nodeIntegration: false,
 			contextIsolation: true,
-			webSecurity: false,
 			backgroundThrottling: false,
 		},
 	});
