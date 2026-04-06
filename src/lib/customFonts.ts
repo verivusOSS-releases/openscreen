@@ -189,7 +189,11 @@ export function parseFontFamilyFromImport(importUrl: string): string | null {
 export function isValidGoogleFontsUrl(url: string): boolean {
 	try {
 		const urlObj = new URL(url);
-		return urlObj.hostname === "fonts.googleapis.com" && urlObj.searchParams.has("family");
+		return (
+			urlObj.protocol === "https:" &&
+			urlObj.hostname === "fonts.googleapis.com" &&
+			urlObj.searchParams.has("family")
+		);
 	} catch {
 		return false;
 	}
