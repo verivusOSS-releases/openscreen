@@ -23,6 +23,38 @@ describe("projectPersistence media compatibility", () => {
 		});
 	});
 
+	it("rejects projects without valid media", () => {
+		const project = {
+			version: 1,
+			editor: {},
+		};
+		expect(validateProjectData(project)).toBe(false);
+		expect(resolveProjectMedia(project)).toBeNull();
+	});
+
+	it("rejects non-object candidates", () => {
+		expect(validateProjectData(null)).toBe(false);
+		expect(validateProjectData("string")).toBe(false);
+		expect(validateProjectData(42)).toBe(false);
+		expect(validateProjectData(undefined)).toBe(false);
+	});
+
+	it("rejects projects without version number", () => {
+		const project = {
+			videoPath: "/tmp/screen.webm",
+			editor: {},
+		};
+		expect(validateProjectData(project)).toBe(false);
+	});
+
+	it("rejects projects without editor state", () => {
+		const project = {
+			version: 1,
+			videoPath: "/tmp/screen.webm",
+		};
+		expect(validateProjectData(project)).toBe(false);
+	});
+
 	it("creates version 2 projects with explicit media", () => {
 		const project = createProjectData(
 			{
