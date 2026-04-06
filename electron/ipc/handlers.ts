@@ -218,6 +218,28 @@ function isTrustedMediaPath(filePath: string): boolean {
 	return trustedRoots.some((root) => normalized === root || normalized.startsWith(root + path.sep));
 }
 
+async function isTrustedMediaPathRealpath(filePath: string): Promise<boolean> {
+	if (!isTrustedMediaPath(filePath)) {
+		return false;
+	}
+	try {
+		const realTarget = await fs.realpath(filePath);
+		return isTrustedMediaPath(realTarget);
+	} catch {
+		// File doesn't exist yet (write path) or inaccessible — fall back to logical check
+		return isTrustedMediaPath(filePath);
+	}
+}
+
+function sanitizeFileName(fileName: string): string {
+	// Strip any path separators and parent-directory references to prevent traversal
+	const baseName = path.basename(fileName);
+	if (!baseName || baseName === "." || baseName === "..") {
+		throw new Error("Invalid file name");
+	}
+	return baseName;
+}
+
 function isAllowedExternalUrl(url: string): boolean {
 	if (!url || typeof url !== "string") {
 		return false;
@@ -247,6 +269,10 @@ async function loadRecordedSessionForVideoPath(
 ): Promise<RecordingSession | null> {
 	const normalizedVideoPath = normalizeVideoSourcePath(videoPath);
 	if (!normalizedVideoPath) {
+		return null;
+	}
+
+	if (!isTrustedMediaPath(normalizedVideoPath)) {
 		return null;
 	}
 
@@ -286,12 +312,14 @@ async function storeRecordedSessionFiles(payload: StoreRecordedSessionInput) {
 		typeof payload.createdAt === "number" && Number.isFinite(payload.createdAt)
 			? payload.createdAt
 			: Date.now();
-	const screenVideoPath = resolveRecordingOutputPath(payload.screen.fileName);
+	const safeScreenFileName = sanitizeFileName(payload.screen.fileName);
+	const screenVideoPath = path.join(RECORDINGS_DIR, safeScreenFileName);
 	await fs.writeFile(screenVideoPath, Buffer.from(payload.screen.videoData));
 
 	let webcamVideoPath: string | undefined;
 	if (payload.webcam) {
-		webcamVideoPath = resolveRecordingOutputPath(payload.webcam.fileName);
+		const safeWebcamFileName = sanitizeFileName(payload.webcam.fileName);
+		webcamVideoPath = path.join(RECORDINGS_DIR, safeWebcamFileName);
 		await fs.writeFile(webcamVideoPath, Buffer.from(payload.webcam.videoData));
 	}
 
@@ -517,7 +545,7 @@ export function registerIpcHandlers(
 				return { success: false, message: "Invalid file path" };
 			}
 
-			if (!isTrustedMediaPath(normalizedPath)) {
+			if (!(await isTrustedMediaPathRealpath(normalizedPath))) {
 				return {
 					success: false,
 					message: "Access denied: path is outside trusted media directories",
@@ -568,11 +596,7 @@ export function registerIpcHandlers(
 			return { success: true, samples: [] };
 		}
 
-		if (!isPathAllowed(targetVideoPath)) {
-			console.warn(
-				"[get-cursor-telemetry] Rejected path outside allowed directories:",
-				targetVideoPath,
-			);
+		if (!isTrustedMediaPath(targetVideoPath)) {
 			return { success: true, samples: [] };
 		}
 
@@ -909,13 +933,15 @@ export function registerIpcHandlers(
 			: { success: false };
 	});
 
-	ipcMain.handle("set-current-video-path", async (_, path: string) => {
-		const normalizedPath = normalizeVideoSourcePath(path);
-		if (!normalizedPath || !isPathAllowed(normalizedPath)) {
-			return { success: false, message: "Video path has not been approved" };
+	ipcMain.handle("set-current-video-path", async (_, videoPath: string) => {
+		const normalizedVideoPath = normalizeVideoSourcePath(videoPath);
+		if (!normalizedVideoPath || !isTrustedMediaPath(normalizedVideoPath)) {
+			return {
+				success: false,
+				message: "Access denied: path is outside trusted media directories",
+			};
 		}
-
-		const restoredSession = await loadRecordedSessionForVideoPath(normalizedPath);
+		const restoredSession = await loadRecordedSessionForVideoPath(videoPath);
 		if (restoredSession) {
 			// Approve all media paths from the restored session so they can be read later
 			approveFilePath(restoredSession.screenVideoPath);
@@ -925,7 +951,7 @@ export function registerIpcHandlers(
 			setCurrentRecordingSessionState(restoredSession);
 		} else {
 			setCurrentRecordingSessionState({
-				screenVideoPath: normalizedPath,
+				screenVideoPath: normalizedVideoPath,
 				createdAt: Date.now(),
 			});
 		}
