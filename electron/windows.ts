@@ -11,6 +11,24 @@ const VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
 const RENDERER_DIST = path.join(APP_ROOT, "dist");
 const HEADLESS = process.env["HEADLESS"] === "true";
 
+function isAllowedNavigation(url: string): boolean {
+	try {
+		const parsed = new URL(url);
+		// Allow app-media:// custom protocol
+		if (parsed.protocol === "app-media:") return true;
+		// Allow file:// only for local paths (not UNC/network)
+		if (parsed.protocol === "file:" && !parsed.hostname) return true;
+		// In dev mode, allow exact Vite dev server origin
+		if (VITE_DEV_SERVER_URL) {
+			const devOrigin = new URL(VITE_DEV_SERVER_URL).origin;
+			if (parsed.origin === devOrigin) return true;
+		}
+		return false;
+	} catch {
+		return false;
+	}
+}
+
 export function registerMediaProtocol() {
 	protocol.handle("app-media", async (request) => {
 		const url = new URL(request.url);
@@ -111,11 +129,7 @@ export function createHudOverlayWindow(): BrowserWindow {
 
 	// Block renderer-initiated navigation to external URLs
 	win.webContents.on("will-navigate", (event, url) => {
-		const allowedOrigins = VITE_DEV_SERVER_URL
-			? [VITE_DEV_SERVER_URL, "file://", "app-media://"]
-			: ["file://", "app-media://"];
-		const isAllowed = allowedOrigins.some((origin) => url.startsWith(origin));
-		if (!isAllowed) {
+		if (!isAllowedNavigation(url)) {
 			event.preventDefault();
 		}
 	});
@@ -178,11 +192,7 @@ export function createEditorWindow(): BrowserWindow {
 
 	// Block renderer-initiated navigation to external URLs
 	win.webContents.on("will-navigate", (event, url) => {
-		const allowedOrigins = VITE_DEV_SERVER_URL
-			? [VITE_DEV_SERVER_URL, "file://", "app-media://"]
-			: ["file://", "app-media://"];
-		const isAllowed = allowedOrigins.some((origin) => url.startsWith(origin));
-		if (!isAllowed) {
+		if (!isAllowedNavigation(url)) {
 			event.preventDefault();
 		}
 	});
@@ -229,11 +239,7 @@ export function createSourceSelectorWindow(): BrowserWindow {
 
 	// Block renderer-initiated navigation to external URLs
 	win.webContents.on("will-navigate", (event, url) => {
-		const allowedOrigins = VITE_DEV_SERVER_URL
-			? [VITE_DEV_SERVER_URL, "file://", "app-media://"]
-			: ["file://", "app-media://"];
-		const isAllowed = allowedOrigins.some((origin) => url.startsWith(origin));
-		if (!isAllowed) {
+		if (!isAllowedNavigation(url)) {
 			event.preventDefault();
 		}
 	});
