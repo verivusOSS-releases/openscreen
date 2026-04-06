@@ -97,26 +97,6 @@ async function approveReadableVideoPath(
 	return normalizedPath;
 }
 
-function resolveRecordingOutputPath(fileName: string): string {
-	const trimmed = fileName.trim();
-	if (!trimmed) {
-		throw new Error("Invalid recording file name");
-	}
-
-	const parsedPath = path.parse(trimmed);
-	const hasTraversalSegments = trimmed.split(/[\\/]+/).some((segment) => segment === "..");
-	const isNestedPath =
-		parsedPath.dir !== "" ||
-		path.isAbsolute(trimmed) ||
-		trimmed.includes("/") ||
-		trimmed.includes("\\");
-	if (hasTraversalSegments || isNestedPath || parsedPath.base !== trimmed) {
-		throw new Error("Recording file name must not contain path segments");
-	}
-
-	return path.join(RECORDINGS_DIR, parsedPath.base);
-}
-
 async function getApprovedProjectSession(
 	project: unknown,
 	projectFilePath?: string,
@@ -701,6 +681,7 @@ export function registerIpcHandlers(
 			}
 
 			await fs.writeFile(result.filePath, Buffer.from(videoData));
+			approveFilePath(result.filePath);
 
 			return {
 				success: true,
@@ -760,7 +741,7 @@ export function registerIpcHandlers(
 
 	ipcMain.handle("reveal-in-folder", async (_, filePath: string) => {
 		try {
-			if (!isTrustedMediaPath(filePath)) {
+			if (!isPathAllowed(filePath)) {
 				return {
 					success: false,
 					error: "Access denied: path is outside trusted media directories",
@@ -935,7 +916,7 @@ export function registerIpcHandlers(
 
 	ipcMain.handle("set-current-video-path", async (_, videoPath: string) => {
 		const normalizedVideoPath = normalizeVideoSourcePath(videoPath);
-		if (!normalizedVideoPath || !isTrustedMediaPath(normalizedVideoPath)) {
+		if (!normalizedVideoPath || !isPathAllowed(normalizedVideoPath)) {
 			return {
 				success: false,
 				message: "Access denied: path is outside trusted media directories",
