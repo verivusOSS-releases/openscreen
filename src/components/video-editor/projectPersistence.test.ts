@@ -138,22 +138,37 @@ it("detects unsaved changes from differing snapshots", () => {
 });
 
 describe("isAllowedWallpaperValue", () => {
-	it("allows local asset paths", () => {
+	it("allows known wallpaper asset paths", () => {
 		expect(isAllowedWallpaperValue("/wallpapers/wallpaper1.jpg")).toBe(true);
-		expect(isAllowedWallpaperValue("/assets/bg.png")).toBe(true);
+		expect(isAllowedWallpaperValue("/wallpapers/wallpaper18.jpg")).toBe(true);
+		expect(isAllowedWallpaperValue("/wallpapers/custom.png")).toBe(true);
+		expect(isAllowedWallpaperValue("/wallpapers/bg.webp")).toBe(true);
+	});
+
+	it("rejects arbitrary local paths", () => {
+		expect(isAllowedWallpaperValue("/etc/passwd")).toBe(false);
+		expect(isAllowedWallpaperValue("/arbitrary/path")).toBe(false);
+		expect(isAllowedWallpaperValue("/%2e%2e/secret")).toBe(false);
+		expect(isAllowedWallpaperValue("/wallpapers/../../../etc/passwd")).toBe(false);
 	});
 
 	it("allows app-media:// URLs", () => {
 		expect(isAllowedWallpaperValue("app-media:///path/to/wallpaper.jpg")).toBe(true);
 	});
 
-	it("allows data: URIs", () => {
+	it("allows data: image URIs", () => {
 		expect(isAllowedWallpaperValue("data:image/png;base64,abc123")).toBe(true);
+		expect(isAllowedWallpaperValue("data:image/jpeg;base64,xyz")).toBe(true);
+	});
+
+	it("rejects non-image data: URIs", () => {
+		expect(isAllowedWallpaperValue("data:text/html,<script>alert(1)</script>")).toBe(false);
 	});
 
 	it("allows color hex values", () => {
 		expect(isAllowedWallpaperValue("#ff0000")).toBe(true);
 		expect(isAllowedWallpaperValue("#000")).toBe(true);
+		expect(isAllowedWallpaperValue("#aabbccdd")).toBe(true);
 	});
 
 	it("allows gradient strings", () => {

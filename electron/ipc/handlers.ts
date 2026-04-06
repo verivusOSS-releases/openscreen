@@ -648,7 +648,7 @@ export function registerIpcHandlers(
 			// or if the path is somehow invalid for showItemInFolder
 			try {
 				const dir = path.dirname(filePath);
-				if (!isTrustedMediaPath(dir)) {
+				if (!(await isTrustedMediaPathRealpath(dir))) {
 					return {
 						success: false,
 						error: "Fallback directory is outside trusted media directories",

@@ -78,15 +78,18 @@ export function isAllowedWallpaperValue(wallpaper: string): boolean {
 	if (!wallpaper || typeof wallpaper !== "string") {
 		return false;
 	}
-	// Allow: local asset paths (/wallpapers/...), app-media:// URLs, data: URIs,
-	// color hex values (#...), gradients (linear-gradient(...), radial-gradient(...))
-	if (wallpaper.startsWith("/")) return true;
+	// Allow only known local wallpaper asset paths (no arbitrary / paths)
+	if (/^\/wallpapers\/[^/]+\.(jpg|jpeg|png|webp)$/i.test(wallpaper)) return true;
+	// Allow app-media:// URLs (validated by the custom protocol handler)
 	if (wallpaper.startsWith("app-media://")) return true;
-	if (wallpaper.startsWith("data:")) return true;
-	if (wallpaper.startsWith("#")) return true;
-	if (wallpaper.startsWith("linear-gradient")) return true;
-	if (wallpaper.startsWith("radial-gradient")) return true;
-	// Reject everything else: http://, https://, file://, javascript:, blob:, etc.
+	// Allow data: URIs (user-uploaded custom wallpapers)
+	if (wallpaper.startsWith("data:image/")) return true;
+	// Allow color hex values
+	if (/^#[0-9a-fA-F]{3,8}$/.test(wallpaper)) return true;
+	// Allow CSS gradients
+	if (wallpaper.startsWith("linear-gradient(")) return true;
+	if (wallpaper.startsWith("radial-gradient(")) return true;
+	// Reject everything else
 	return false;
 }
 
