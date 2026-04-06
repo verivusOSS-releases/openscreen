@@ -129,10 +129,9 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 		return preferred.find((type) => MediaRecorder.isTypeSupported(type)) ?? "video/webm";
 	};
 
-	const computeBitrate = (width: number, height: number) => {
+	const computeBitrate = (width: number, height: number, frameRate: number) => {
 		const pixels = width * height;
-		const highFrameRateBoost =
-			TARGET_FRAME_RATE >= HIGH_FRAME_RATE_THRESHOLD ? HIGH_FRAME_RATE_BOOST : 1;
+		const highFrameRateBoost = frameRate >= HIGH_FRAME_RATE_THRESHOLD ? HIGH_FRAME_RATE_BOOST : 1;
 
 		if (pixels >= FOUR_K_PIXELS) {
 			return Math.round(BITRATE_4K * highFrameRateBoost);
@@ -514,7 +513,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 			width = Math.floor(width / CODEC_ALIGNMENT) * CODEC_ALIGNMENT;
 			height = Math.floor(height / CODEC_ALIGNMENT) * CODEC_ALIGNMENT;
 
-			const videoBitsPerSecond = computeBitrate(width, height);
+			const videoBitsPerSecond = computeBitrate(width, height, frameRate ?? TARGET_FRAME_RATE);
 			const mimeType = selectMimeType();
 
 			console.log(
