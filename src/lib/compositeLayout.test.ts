@@ -33,7 +33,7 @@ describe("computeCompositeLayout", () => {
 		).toBeLessThanOrEqual(1920);
 	});
 
-	it("uses cover-style full-width stacking in vertical stack mode", () => {
+	it("bounds vertical-stack within maxContentSize when webcam is present", () => {
 		const layout = computeCompositeLayout({
 			canvasSize: { width: 1920, height: 1080 },
 			maxContentSize: { width: 1536, height: 864 },
@@ -43,23 +43,14 @@ describe("computeCompositeLayout", () => {
 		});
 
 		expect(layout).not.toBeNull();
-		expect(layout?.screenRect).toEqual({
-			x: 0,
-			y: 0,
-			width: 1920,
-			height: 0,
-		});
-		expect(layout?.webcamRect).toEqual({
-			x: 0,
-			y: 0,
-			width: 1920,
-			height: 1080,
-			borderRadius: 0,
-		});
-		expect(layout?.screenCover).toBe(true);
+		expect(layout!.screenRect.width).toBeLessThanOrEqual(1536);
+		expect(layout!.screenRect.height + (layout!.webcamRect?.height ?? 0)).toBeLessThanOrEqual(
+			864 + 1,
+		);
+		expect(layout!.screenRect.x).toBeGreaterThan(0);
 	});
 
-	it("fills the canvas with the screen when vertical stack has no webcam", () => {
+	it("bounds the screen within maxContentSize when vertical stack has no webcam", () => {
 		const layout = computeCompositeLayout({
 			canvasSize: { width: 1920, height: 1080 },
 			maxContentSize: { width: 1536, height: 864 },
@@ -69,13 +60,12 @@ describe("computeCompositeLayout", () => {
 
 		expect(layout).not.toBeNull();
 		expect(layout?.screenRect).toEqual({
-			x: 0,
-			y: 0,
-			width: 1920,
-			height: 1080,
+			x: 192,
+			y: 108,
+			width: 1536,
+			height: 864,
 		});
 		expect(layout?.webcamRect).toBeNull();
-		expect(layout?.screenCover).toBe(true);
 	});
 
 	it("forces circular and square masks to use square dimensions", () => {

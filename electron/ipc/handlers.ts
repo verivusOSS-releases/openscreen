@@ -819,26 +819,17 @@ export function registerIpcHandlers(
 			const filePath = result.filePaths[0];
 			const content = await fs.readFile(filePath, "utf-8");
 			const project = JSON.parse(content);
-			if (project && typeof project === "object") {
-				const rawProject = project as { media?: unknown; videoPath?: unknown };
-				const media =
-					normalizeProjectMedia(rawProject.media) ??
-					(typeof rawProject.videoPath === "string"
-						? {
-								screenVideoPath:
-									normalizeVideoSourcePath(rawProject.videoPath) ?? rawProject.videoPath,
-							}
-						: null);
-				currentProjectPath = filePath;
-				setCurrentRecordingSessionState(media ? { ...media, createdAt: Date.now() } : null);
-			} else {
-				// Invalid project structure — don't update currentProjectPath or session state
+			if (!project || typeof project !== "object") {
 				return {
 					success: false,
 					path: filePath,
 					message: "Invalid project structure: file does not contain a valid project object",
 				};
 			}
+
+			const session = await getApprovedProjectSession(project, filePath);
+			currentProjectPath = filePath;
+			setCurrentRecordingSessionState(session);
 
 			return {
 				success: true,
@@ -863,19 +854,7 @@ export function registerIpcHandlers(
 
 			const content = await fs.readFile(currentProjectPath, "utf-8");
 			const project = JSON.parse(content);
-			if (project && typeof project === "object") {
-				const rawProject = project as { media?: unknown; videoPath?: unknown };
-				const media =
-					normalizeProjectMedia(rawProject.media) ??
-					(typeof rawProject.videoPath === "string"
-						? {
-								screenVideoPath:
-									normalizeVideoSourcePath(rawProject.videoPath) ?? rawProject.videoPath,
-							}
-						: null);
-				setCurrentRecordingSessionState(media ? { ...media, createdAt: Date.now() } : null);
-			} else {
-				// Project file contains invalid structure — clear stale state
+			if (!project || typeof project !== "object") {
 				const stalePath = currentProjectPath;
 				currentProjectPath = null;
 				setCurrentRecordingSessionState(null);
@@ -885,6 +864,9 @@ export function registerIpcHandlers(
 					message: "Invalid project structure: file does not contain a valid project object",
 				};
 			}
+
+			const session = await getApprovedProjectSession(project, currentProjectPath);
+			setCurrentRecordingSessionState(session);
 			return {
 				success: true,
 				path: currentProjectPath,
