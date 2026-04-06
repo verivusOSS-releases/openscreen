@@ -3,6 +3,7 @@ import {
 	createProjectData,
 	createProjectSnapshot,
 	hasProjectUnsavedChanges,
+	isAllowedWallpaperValue,
 	normalizeProjectEditor,
 	PROJECT_VERSION,
 	resolveProjectMedia,
@@ -134,4 +135,69 @@ it("detects unsaved changes from differing snapshots", () => {
 	expect(hasProjectUnsavedChanges(null, null)).toBe(false);
 	expect(hasProjectUnsavedChanges("same", "same")).toBe(false);
 	expect(hasProjectUnsavedChanges("current", "baseline")).toBe(true);
+});
+
+describe("isAllowedWallpaperValue", () => {
+	it("allows local asset paths", () => {
+		expect(isAllowedWallpaperValue("/wallpapers/wallpaper1.jpg")).toBe(true);
+		expect(isAllowedWallpaperValue("/assets/bg.png")).toBe(true);
+	});
+
+	it("allows app-media:// URLs", () => {
+		expect(isAllowedWallpaperValue("app-media:///path/to/wallpaper.jpg")).toBe(true);
+	});
+
+	it("allows data: URIs", () => {
+		expect(isAllowedWallpaperValue("data:image/png;base64,abc123")).toBe(true);
+	});
+
+	it("allows color hex values", () => {
+		expect(isAllowedWallpaperValue("#ff0000")).toBe(true);
+		expect(isAllowedWallpaperValue("#000")).toBe(true);
+	});
+
+	it("allows gradient strings", () => {
+		expect(isAllowedWallpaperValue("linear-gradient(to right, #000, #fff)")).toBe(true);
+		expect(isAllowedWallpaperValue("radial-gradient(circle, #000, #fff)")).toBe(true);
+	});
+
+	it("rejects http URLs", () => {
+		expect(isAllowedWallpaperValue("http://evil.com/image.jpg")).toBe(false);
+		expect(isAllowedWallpaperValue("https://evil.com/track?user=123")).toBe(false);
+	});
+
+	it("rejects other dangerous schemes", () => {
+		expect(isAllowedWallpaperValue("javascript:alert(1)")).toBe(false);
+		expect(isAllowedWallpaperValue("file:///etc/passwd")).toBe(false);
+		expect(isAllowedWallpaperValue("blob:https://example.com/uuid")).toBe(false);
+	});
+
+	it("rejects empty/invalid inputs", () => {
+		expect(isAllowedWallpaperValue("")).toBe(false);
+		expect(isAllowedWallpaperValue(null as unknown as string)).toBe(false);
+		expect(isAllowedWallpaperValue(undefined as unknown as string)).toBe(false);
+	});
+});
+
+describe("normalizeProjectEditor wallpaper sanitization", () => {
+	it("strips external HTTP wallpaper URLs and uses default", () => {
+		const result = normalizeProjectEditor({
+			wallpaper: "https://evil.com/tracking-pixel.png",
+		});
+		expect(result.wallpaper).toBe("/wallpapers/wallpaper1.jpg");
+	});
+
+	it("preserves valid local wallpaper paths", () => {
+		const result = normalizeProjectEditor({
+			wallpaper: "/wallpapers/wallpaper5.jpg",
+		});
+		expect(result.wallpaper).toBe("/wallpapers/wallpaper5.jpg");
+	});
+
+	it("preserves data: URI wallpapers", () => {
+		const result = normalizeProjectEditor({
+			wallpaper: "data:image/png;base64,iVBOR",
+		});
+		expect(result.wallpaper).toBe("data:image/png;base64,iVBOR");
+	});
 });
