@@ -553,6 +553,8 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 				activeScreenRecorder.recorder.addEventListener(
 					"error",
 					() => {
+						// Suppress auto-finalize to prevent the stop listener from racing this cleanup
+						allowAutoFinalize.current = false;
 						if (screenRecorder.current === activeScreenRecorder) {
 							screenRecorder.current = null;
 						}
