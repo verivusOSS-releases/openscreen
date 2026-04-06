@@ -74,6 +74,22 @@ function isFileUrl(value: string): boolean {
 	return /^file:\/\//i.test(value);
 }
 
+export function isAllowedWallpaperValue(wallpaper: string): boolean {
+	if (!wallpaper || typeof wallpaper !== "string") {
+		return false;
+	}
+	// Allow: local asset paths (/wallpapers/...), app-media:// URLs, data: URIs,
+	// color hex values (#...), gradients (linear-gradient(...), radial-gradient(...))
+	if (wallpaper.startsWith("/")) return true;
+	if (wallpaper.startsWith("app-media://")) return true;
+	if (wallpaper.startsWith("data:")) return true;
+	if (wallpaper.startsWith("#")) return true;
+	if (wallpaper.startsWith("linear-gradient")) return true;
+	if (wallpaper.startsWith("radial-gradient")) return true;
+	// Reject everything else: http://, https://, file://, javascript:, blob:, etc.
+	return false;
+}
+
 function encodePathSegments(pathname: string, keepWindowsDrive = false): string {
 	return pathname
 		.split("/")
@@ -327,7 +343,10 @@ export function normalizeProjectEditor(editor: Partial<ProjectEditorState>): Pro
 	const cropHeight = clamp(rawCropHeight, 0.01, 1 - cropY);
 
 	return {
-		wallpaper: typeof editor.wallpaper === "string" ? editor.wallpaper : WALLPAPER_PATHS[0],
+		wallpaper:
+			typeof editor.wallpaper === "string" && isAllowedWallpaperValue(editor.wallpaper)
+				? editor.wallpaper
+				: WALLPAPER_PATHS[0],
 		shadowIntensity: typeof editor.shadowIntensity === "number" ? editor.shadowIntensity : 0,
 		showBlur: typeof editor.showBlur === "boolean" ? editor.showBlur : false,
 		motionBlurAmount: isFiniteNumber(editor.motionBlurAmount)

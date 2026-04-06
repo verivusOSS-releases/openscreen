@@ -24,143 +24,7 @@ import { RECORDINGS_DIR } from "../main";
 const PROJECT_FILE_EXTENSION = "openscreen";
 const SHORTCUTS_FILE = path.join(app.getPath("userData"), "shortcuts.json");
 const RECORDING_SESSION_SUFFIX = ".session.json";
-const ALLOWED_IMPORT_VIDEO_EXTENSIONS = new Set([".webm", ".mp4", ".mov", ".avi", ".mkv"]);
-
-/**
- * Paths explicitly approved by the user via file picker dialogs or project loads.
- * These are added at runtime when the user selects files from outside the default directories.
- */
-const approvedPaths = new Set<string>();
-
-function approveFilePath(filePath: string): void {
-	approvedPaths.add(path.resolve(filePath));
-}
-
-function getAllowedReadDirs(): string[] {
-	return [RECORDINGS_DIR];
-}
-
-function isPathWithinDir(filePath: string, dirPath: string): boolean {
-	const resolved = path.resolve(filePath);
-	const resolvedDir = path.resolve(dirPath);
-	return resolved === resolvedDir || resolved.startsWith(resolvedDir + path.sep);
-}
-
-function isPathAllowed(filePath: string): boolean {
-	const resolved = path.resolve(filePath);
-	if (approvedPaths.has(resolved)) return true;
-	return getAllowedReadDirs().some((dir) => isPathWithinDir(resolved, dir));
-}
-
-function hasAllowedImportVideoExtension(filePath: string): boolean {
-	return ALLOWED_IMPORT_VIDEO_EXTENSIONS.has(path.extname(filePath).toLowerCase());
-}
-
-async function approveReadableVideoPath(
-	filePath?: string | null,
-	trustedDirs?: string[],
-): Promise<string | null> {
-	const normalizedPath = normalizeVideoSourcePath(filePath);
-	if (!normalizedPath) {
-		return null;
-	}
-
-	if (isPathAllowed(normalizedPath)) {
-		return normalizedPath;
-	}
-
-	if (!hasAllowedImportVideoExtension(normalizedPath)) {
-		return null;
-	}
-
-	// When called with trustedDirs (e.g. from project load), only auto-approve
-	// paths within those directories. This prevents malicious project files from
-	// approving reads to arbitrary filesystem locations.
-	if (trustedDirs) {
-		const resolved = path.resolve(normalizedPath);
-		const withinTrusted = trustedDirs.some((dir) => isPathWithinDir(resolved, dir));
-		if (!withinTrusted) {
-			return null;
-		}
-	}
-
-	try {
-		const stats = await fs.stat(normalizedPath);
-		if (!stats.isFile()) {
-			return null;
-		}
-	} catch {
-		return null;
-	}
-
-	approveFilePath(normalizedPath);
-	return normalizedPath;
-}
-
-function resolveRecordingOutputPath(fileName: string): string {
-	const trimmed = fileName.trim();
-	if (!trimmed) {
-		throw new Error("Invalid recording file name");
-	}
-
-	const parsedPath = path.parse(trimmed);
-	const hasTraversalSegments = trimmed.split(/[\\/]+/).some((segment) => segment === "..");
-	const isNestedPath =
-		parsedPath.dir !== "" ||
-		path.isAbsolute(trimmed) ||
-		trimmed.includes("/") ||
-		trimmed.includes("\\");
-	if (hasTraversalSegments || isNestedPath || parsedPath.base !== trimmed) {
-		throw new Error("Recording file name must not contain path segments");
-	}
-
-	return path.join(RECORDINGS_DIR, parsedPath.base);
-}
-
-async function getApprovedProjectSession(
-	project: unknown,
-	projectFilePath?: string,
-): Promise<RecordingSession | null> {
-	if (!project || typeof project !== "object") {
-		return null;
-	}
-
-	const rawProject = project as { media?: unknown; videoPath?: unknown };
-	const media: ProjectMedia | null =
-		normalizeProjectMedia(rawProject.media) ??
-		(typeof rawProject.videoPath === "string"
-			? {
-					screenVideoPath: normalizeVideoSourcePath(rawProject.videoPath) ?? rawProject.videoPath,
-				}
-			: null);
-
-	if (!media) {
-		return null;
-	}
-
-	// Only auto-approve media paths within the project's directory or RECORDINGS_DIR.
-	// This prevents crafted project files from approving reads to arbitrary locations.
-	const trustedDirs = [RECORDINGS_DIR];
-	if (projectFilePath) {
-		trustedDirs.push(path.dirname(path.resolve(projectFilePath)));
-	}
-
-	const screenVideoPath = await approveReadableVideoPath(media.screenVideoPath, trustedDirs);
-	if (!screenVideoPath) {
-		throw new Error("Project references an invalid or unsupported screen video path");
-	}
-
-	const webcamVideoPath = media.webcamVideoPath
-		? await approveReadableVideoPath(media.webcamVideoPath, trustedDirs)
-		: undefined;
-	if (media.webcamVideoPath && !webcamVideoPath) {
-		throw new Error("Project references an invalid or unsupported webcam video path");
-	}
-
-	return webcamVideoPath
-		? { screenVideoPath, webcamVideoPath, createdAt: Date.now() }
-		: { screenVideoPath, createdAt: Date.now() };
-}
+const ALLOWED_EXTERNAL_DOMAINS: string[] = ["github.com"];
 
 type SelectedSource = {
 	name: string;
@@ -652,6 +516,15 @@ export function registerIpcHandlers(
 			if (!isAllowedExternalUrl(url)) {
 				return { success: false, error: "URL scheme not allowed" };
 			}
+
+			const parsedUrl = new URL(url);
+			const isAllowedDomain = ALLOWED_EXTERNAL_DOMAINS.some(
+				(domain) => parsedUrl.hostname === domain || parsedUrl.hostname.endsWith(`.${domain}`),
+			);
+			if (!isAllowedDomain) {
+				return { success: false, error: "Domain not in allowlist" };
+			}
+
 			await shell.openExternal(url);
 			return { success: true };
 		} catch (error) {
@@ -774,7 +647,14 @@ export function registerIpcHandlers(
 			// This might happen if the file was moved or deleted after export,
 			// or if the path is somehow invalid for showItemInFolder
 			try {
-				const openPathResult = await shell.openPath(path.dirname(filePath));
+				const dir = path.dirname(filePath);
+				if (!isTrustedMediaPath(dir)) {
+					return {
+						success: false,
+						error: "Fallback directory is outside trusted media directories",
+					};
+				}
+				const openPathResult = await shell.openPath(dir);
 				if (openPathResult) {
 					// openPath returned an error message
 					return { success: false, error: openPathResult };

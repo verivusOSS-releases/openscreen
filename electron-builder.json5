@@ -29,7 +29,9 @@
   "publish": [{"provider": "github"}],
 
   "mac": {
-    "hardenedRuntime": false,
+    "hardenedRuntime": true,
+    "entitlements": "entitlements.mac.plist",
+    "entitlementsInherit": "entitlements.mac.inherit.plist",
     "target": [
       {
         "target": "dmg",

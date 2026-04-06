@@ -8,6 +8,7 @@ import {
 	type TextureSourceLike,
 } from "pixi.js";
 import { MotionBlurFilter } from "pixi-filters/motion-blur";
+import { isAllowedWallpaperValue } from "@/components/video-editor/projectPersistence";
 import type {
 	AnnotationRegion,
 	CropRegion,
@@ -219,6 +220,14 @@ export class FrameRenderer {
 		bgCanvas.width = this.config.width;
 		bgCanvas.height = this.config.height;
 		const bgCtx = bgCanvas.getContext("2d")!;
+
+		// Reject disallowed wallpaper values (e.g., external http URLs, file://, javascript:, blob:)
+		if (!isAllowedWallpaperValue(wallpaper)) {
+			bgCtx.fillStyle = "#000000";
+			bgCtx.fillRect(0, 0, this.config.width, this.config.height);
+			this.backgroundSprite = bgCanvas;
+			return;
+		}
 
 		try {
 			// Render background based on type

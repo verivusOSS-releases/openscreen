@@ -106,6 +106,20 @@ export function createHudOverlayWindow(): BrowserWindow {
 		},
 	});
 
+	// Block renderer-initiated popups
+	win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+
+	// Block renderer-initiated navigation to external URLs
+	win.webContents.on("will-navigate", (event, url) => {
+		const allowedOrigins = VITE_DEV_SERVER_URL
+			? [VITE_DEV_SERVER_URL, "file://", "app-media://"]
+			: ["file://", "app-media://"];
+		const isAllowed = allowedOrigins.some((origin) => url.startsWith(origin));
+		if (!isAllowed) {
+			event.preventDefault();
+		}
+	});
+
 	win.webContents.on("did-finish-load", () => {
 		win?.webContents.send("main-process-message", new Date().toLocaleString());
 	});
@@ -159,6 +173,20 @@ export function createEditorWindow(): BrowserWindow {
 	// Maximize the window by default
 	win.maximize();
 
+	// Block renderer-initiated popups
+	win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+
+	// Block renderer-initiated navigation to external URLs
+	win.webContents.on("will-navigate", (event, url) => {
+		const allowedOrigins = VITE_DEV_SERVER_URL
+			? [VITE_DEV_SERVER_URL, "file://", "app-media://"]
+			: ["file://", "app-media://"];
+		const isAllowed = allowedOrigins.some((origin) => url.startsWith(origin));
+		if (!isAllowed) {
+			event.preventDefault();
+		}
+	});
+
 	win.webContents.on("did-finish-load", () => {
 		win?.webContents.send("main-process-message", new Date().toLocaleString());
 	});
@@ -194,6 +222,20 @@ export function createSourceSelectorWindow(): BrowserWindow {
 			nodeIntegration: false,
 			contextIsolation: true,
 		},
+	});
+
+	// Block renderer-initiated popups
+	win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+
+	// Block renderer-initiated navigation to external URLs
+	win.webContents.on("will-navigate", (event, url) => {
+		const allowedOrigins = VITE_DEV_SERVER_URL
+			? [VITE_DEV_SERVER_URL, "file://", "app-media://"]
+			: ["file://", "app-media://"];
+		const isAllowed = allowedOrigins.some((origin) => url.startsWith(origin));
+		if (!isAllowed) {
+			event.preventDefault();
+		}
 	});
 
 	if (VITE_DEV_SERVER_URL) {
