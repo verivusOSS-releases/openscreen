@@ -203,6 +203,33 @@ function isTrustedProjectPath(filePath?: string | null) {
 	return normalizePath(filePath) === normalizePath(currentProjectPath);
 }
 
+function isTrustedMediaPath(filePath: string): boolean {
+	if (!filePath || typeof filePath !== "string") {
+		return false;
+	}
+	const normalized = normalizePath(filePath);
+
+	const trustedRoots: string[] = [normalizePath(RECORDINGS_DIR)];
+
+	if (currentProjectPath) {
+		trustedRoots.push(normalizePath(path.dirname(currentProjectPath)));
+	}
+
+	return trustedRoots.some((root) => normalized === root || normalized.startsWith(root + path.sep));
+}
+
+function isAllowedExternalUrl(url: string): boolean {
+	if (!url || typeof url !== "string") {
+		return false;
+	}
+	try {
+		const parsed = new URL(url);
+		return parsed.protocol === "https:" || parsed.protocol === "http:";
+	} catch {
+		return false;
+	}
+}
+
 function setCurrentRecordingSessionState(session: RecordingSession | null) {
 	currentRecordingSession = session;
 }
@@ -490,12 +517,11 @@ export function registerIpcHandlers(
 				return { success: false, message: "Invalid file path" };
 			}
 
-			if (!isPathAllowed(normalizedPath)) {
-				console.warn(
-					"[read-binary-file] Rejected path outside allowed directories:",
-					normalizedPath,
-				);
-				return { success: false, message: "Access denied: path outside allowed directories" };
+			if (!isTrustedMediaPath(normalizedPath)) {
+				return {
+					success: false,
+					message: "Access denied: path is outside trusted media directories",
+				};
 			}
 
 			const data = await fs.readFile(normalizedPath);
@@ -599,6 +625,9 @@ export function registerIpcHandlers(
 
 	ipcMain.handle("open-external-url", async (_, url: string) => {
 		try {
+			if (!isAllowedExternalUrl(url)) {
+				return { success: false, error: "URL scheme not allowed" };
+			}
 			await shell.openExternal(url);
 			return { success: true };
 		} catch (error) {
@@ -707,7 +736,12 @@ export function registerIpcHandlers(
 
 	ipcMain.handle("reveal-in-folder", async (_, filePath: string) => {
 		try {
-			// shell.showItemInFolder doesn't return a value, it throws on error
+			if (!isTrustedMediaPath(filePath)) {
+				return {
+					success: false,
+					error: "Access denied: path is outside trusted media directories",
+				};
+			}
 			shell.showItemInFolder(filePath);
 			return { success: true };
 		} catch (error) {
