@@ -149,37 +149,77 @@ export function computeCompositeLayout(params: {
 
 	if (preset.transform.type === "stack") {
 		if (!webcamWidth || !webcamHeight || webcamWidth <= 0 || webcamHeight <= 0) {
-			// No webcam — screen fills the entire canvas (cover mode)
+			// No webcam — center the screen within the bounded content area
+			const screenRect = centerRect({
+				canvasSize,
+				size: screenSize,
+				maxSize: maxContentSize,
+			});
 			return {
-				screenRect: { x: 0, y: 0, width: canvasWidth, height: canvasHeight },
+				screenRect,
 				webcamRect: null,
-				screenCover: true,
 			};
 		}
 
-		// Webcam: full width at the bottom, maintaining its aspect ratio
+		// Both screen and webcam share a common width; compute heights at that width
+		const screenAspect = screenWidth / screenHeight;
 		const webcamAspect = webcamWidth / webcamHeight;
-		const resolvedWebcamWidth = canvasWidth;
-		const resolvedWebcamHeight = Math.round(canvasWidth / webcamAspect);
 
-		// Screen: fills remaining space at the top (cover mode — may crop sides)
-		const screenRectHeight = canvasHeight - resolvedWebcamHeight;
+		// Start with the max content width, then derive heights
+		const { width: maxW, height: maxH } = maxContentSize;
+		let commonWidth = Math.min(maxW, canvasWidth);
+		let sHeight = commonWidth / screenAspect;
+		let wHeight = commonWidth / webcamAspect;
+		let totalHeight = sHeight + wHeight;
+
+		// If combined height exceeds the max, scale everything down uniformly
+		if (totalHeight > maxH) {
+			const heightScale = maxH / totalHeight;
+			commonWidth = commonWidth * heightScale;
+			sHeight = sHeight * heightScale;
+			wHeight = wHeight * heightScale;
+			totalHeight = sHeight + wHeight;
+		}
+
+		// Also ensure we don't exceed canvas dimensions
+		if (commonWidth > canvasWidth) {
+			const scale = canvasWidth / commonWidth;
+			commonWidth *= scale;
+			sHeight *= scale;
+			wHeight *= scale;
+			totalHeight = sHeight + wHeight;
+		}
+		if (totalHeight > canvasHeight) {
+			const scale = canvasHeight / totalHeight;
+			commonWidth *= scale;
+			sHeight *= scale;
+			wHeight *= scale;
+			totalHeight = sHeight + wHeight;
+		}
+
+		const resolvedWidth = Math.round(commonWidth);
+		const resolvedScreenHeight = Math.round(sHeight);
+		const resolvedWebcamHeight = Math.round(wHeight);
+		const resolvedTotalHeight = resolvedScreenHeight + resolvedWebcamHeight;
+
+		// Center the stacked pair within the canvas
+		const offsetX = Math.max(0, Math.floor((canvasWidth - resolvedWidth) / 2));
+		const offsetY = Math.max(0, Math.floor((canvasHeight - resolvedTotalHeight) / 2));
 
 		return {
 			screenRect: {
-				x: 0,
-				y: 0,
-				width: canvasWidth,
-				height: Math.max(0, screenRectHeight),
+				x: offsetX,
+				y: offsetY,
+				width: resolvedWidth,
+				height: resolvedScreenHeight,
 			},
 			webcamRect: {
-				x: 0,
-				y: Math.max(0, screenRectHeight),
-				width: resolvedWebcamWidth,
+				x: offsetX,
+				y: offsetY + resolvedScreenHeight,
+				width: resolvedWidth,
 				height: resolvedWebcamHeight,
 				borderRadius: 0,
 			},
-			screenCover: true,
 		};
 	}
 
