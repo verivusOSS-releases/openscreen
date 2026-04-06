@@ -344,6 +344,30 @@ app.whenReady().then(async () => {
 	// Register custom protocol for safe local media loading
 	registerMediaProtocol();
 
+	// Enforce Content Security Policy on all renderer windows
+	const VITE_DEV_URL = process.env["VITE_DEV_SERVER_URL"];
+	const cspDirectives = [
+		"default-src 'self' app-media:",
+		"script-src 'self'" + (VITE_DEV_URL ? ` ${VITE_DEV_URL}` : ""),
+		"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+		"font-src 'self' https://fonts.gstatic.com",
+		"img-src 'self' app-media: data: blob:",
+		"media-src 'self' app-media: blob:",
+		"connect-src 'self' https://fonts.googleapis.com" +
+			(VITE_DEV_URL ? ` ${VITE_DEV_URL} ws://localhost:*` : ""),
+		"frame-src 'none'",
+		"object-src 'none'",
+	].join("; ");
+
+	session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+		callback({
+			responseHeaders: {
+				...details.responseHeaders,
+				"Content-Security-Policy": [cspDirectives],
+			},
+		});
+	});
+
 	// Allow microphone/media permission checks
 	session.defaultSession.setPermissionCheckHandler((_webContents, permission) => {
 		const allowed = ["media", "audioCapture", "microphone", "videoCapture", "camera"];
