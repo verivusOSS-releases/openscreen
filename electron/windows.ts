@@ -1,3 +1,4 @@
+import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { app, BrowserWindow, ipcMain, net, protocol, screen } from "electron";
@@ -11,9 +12,8 @@ const RENDERER_DIST = path.join(APP_ROOT, "dist");
 const HEADLESS = process.env["HEADLESS"] === "true";
 
 export function registerMediaProtocol() {
-	protocol.handle("app-media", (request) => {
+	protocol.handle("app-media", async (request) => {
 		const url = new URL(request.url);
-		// The pathname is the absolute file path, percent-encoded
 		let filePath: string;
 		try {
 			filePath = decodeURIComponent(url.pathname);
@@ -34,17 +34,33 @@ export function registerMediaProtocol() {
 				: path.join(APP_ROOT, "public", "assets"),
 		);
 
-		const isTrusted =
-			resolved === recordingsRoot ||
-			resolved.startsWith(recordingsRoot + path.sep) ||
-			resolved === assetsRoot ||
-			resolved.startsWith(assetsRoot + path.sep);
+		function isUnderTrustedRoot(candidate: string): boolean {
+			return (
+				candidate === recordingsRoot ||
+				candidate.startsWith(recordingsRoot + path.sep) ||
+				candidate === assetsRoot ||
+				candidate.startsWith(assetsRoot + path.sep)
+			);
+		}
 
-		if (!isTrusted) {
+		// Check logical path first
+		if (!isUnderTrustedRoot(resolved)) {
 			return new Response("Forbidden", { status: 403 });
 		}
 
-		return net.fetch(pathToFileURL(resolved).toString());
+		// Resolve symlinks to prevent escaping trusted roots via symlink
+		let realResolved: string;
+		try {
+			realResolved = await fs.realpath(resolved);
+		} catch {
+			return new Response("Not Found", { status: 404 });
+		}
+
+		if (!isUnderTrustedRoot(realResolved)) {
+			return new Response("Forbidden", { status: 403 });
+		}
+
+		return net.fetch(pathToFileURL(realResolved).toString());
 	});
 }
 
